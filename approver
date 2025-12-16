@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .debug { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+    .error { color: red; }
+    .success { color: green; }
+    button { margin: 5px; padding: 10px; }
+  </style>
+</head>
+<body>
+  <h2>Debug Approver Page</h2>
+  
+  <div id="userInfo">
+    <p>User: <span id="userName">Not logged in</span></p>
+  </div>
+  
+  <div>
+    <button onclick="testConnection()">Test Connection</button>
+    <button onclick="testGetData()">Test Get Data</button>
+    <button onclick="loadRequests()">Load Requests</button>
+    <button onclick="logout()">Logout</button>
+  </div>
+  
+  <div class="debug" id="debugOutput">
+    Debug output will appear here...
+  </div>
+  
+  <div id="requestsList"></div>
+
+  <script>
+    function debugLog(msg) {
+      const output = document.getElementById('debugOutput');
+      output.innerHTML += '<div>' + new Date().toLocaleTimeString() + ': ' + msg + '</div>';
+      console.log(msg);
+    }
+    
+    function testConnection() {
+      debugLog('Testing connection...');
+      google.script.run
+        .withSuccessHandler(function(result) {
+          debugLog('Success: ' + result);
+          try {
+            const data = JSON.parse(result);
+            debugLog('Parsed: ' + JSON.stringify(data));
+          } catch(e) {
+            debugLog('Parse error: ' + e);
+          }
+        })
+        .withFailureHandler(function(err) {
+          debugLog('Error: ' + err);
+        })
+        .testConnection();
+    }
+    
+    function testGetData() {
+      debugLog('Testing get data...');
+      google.script.run
+        .withSuccessHandler(function(result) {
+          debugLog('Result: ' + result);
+        })
+        .withFailureHandler(function(err) {
+          debugLog('Error: ' + err);
+        })
+        .testGetData();
+    }
+    
+    function loadRequests() {
+      const saved = localStorage.getItem('approver_info');
+      if (!saved) {
+        debugLog('Not logged in');
+        return;
+      }
+      
+      try {
+        const user = JSON.parse(saved);
+        debugLog('Loading requests for: ' + user.code);
+        
+        document.getElementById('userName').textContent = user.name;
+        
+        google.script.run
+          .withSuccessHandler(function(result) {
+            debugLog('Requests result: ' + result);
+            try {
+              const data = JSON.parse(result);
+              displayRequests(data);
+            } catch(e) {
+              debugLog('Parse error: ' + e);
+            }
+          })
+          .withFailureHandler(function(err) {
+            debugLog('Error loading requests: ' + err);
+          })
+          .getPendingRequestsByApprover(user.code);
+          
+      } catch(e) {
+        debugLog('Error parsing user data: ' + e);
+      }
+    }
+    
+    function displayRequests(data) {
+      const container = document.getElementById('requestsList');
+      
+      if (data && data.success && data.requests) {
+        if (data.requests.length === 0) {
+          container.innerHTML = '<p>No pending requests</p>';
+        } else {
+          let html = '<h3>Pending Requests (' + data.requests.length + ')</h3>';
+          html += '<ul>';
+          data.requests.forEach(req => {
+            html += '<li>' + req.ticketId + ' - ' + req.employeeName + ' - ' + req.type + '</li>';
+          });
+          html += '</ul>';
+          container.innerHTML = html;
+        }
+      } else {
+        container.innerHTML = '<p class="error">' + (data.message || 'Error loading requests') + '</p>';
+      }
+    }
+    
+    function logout() {
+      localStorage.removeItem('approver_info');
+      window.location.href = '?page=login';
+    }
+    
+    // เมื่อโหลดหน้า
+    document.addEventListener('DOMContentLoaded', function() {
+      const saved = localStorage.getItem('approver_info');
+      if (saved) {
+        try {
+          const user = JSON.parse(saved);
+          document.getElementById('userName').textContent = user.name + ' (' + user.code + ')';
+        } catch(e) {
+          debugLog('Error loading user data');
+        }
+      }
+      
+      debugLog('Page loaded');
+    });
+  </script>
+</body>
+</html>
